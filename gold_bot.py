@@ -6,69 +6,54 @@ TELEGRAM_TOKEN = "8892269519:AAEtTq9n74OWVRN1CKmzIy5M1dfBbOJUToA"
 CHAT_ID = "7176458499"
 
 def lay_gia_vang():
-    """Lấy giá vàng"""
     try:
-        url = "https://api.npoint.io/9b4f4c8e6d7a5f4c3d2b1"
-        res = requests.get(url, timeout=15)
+        # Lấy giá vàng từ API SJC
+        url = "https://api.btmc.vn/api/price/gold/sjc"
+        response = requests.get(url, timeout=15)
+        data = response.json()
         
-        if res.status_code != 200:
-            return 78500000, 79200000, 2450.50
+        # Trích xuất dữ liệu (đơn vị: VND/ lượng → chuyển đổi VND/chỉ)
+        gia_mua = data.get('buy_price', 0)  # giá mua vào / lượng
+        gia_ban = data.get('sell_price', 0) # giá bán ra / lượng
         
-        data = res.json()
+        # 1 lượng = 10 chỉ → chia cho 10 để ra giá / chỉ
+        gia_mua_chi = gia_mua / 10
+        gia_ban_chi = gia_ban / 10
         
-        sjc_mua = data.get('sjc_buy', 78500000)
-        sjc_ban = data.get('sjc_sell', 79200000)
-        xau = data.get('xau', 2450.50)
-        
-        print(f"✅ SJC Mua: {sjc_mua:,} | Bán: {sjc_ban:,}")
-        print(f"✅ XAU/USD: {xau}")
-        
-        return sjc_mua, sjc_ban, xau
-        
+        return {
+            "gia_mua": gia_mua_chi,
+            "gia_ban": gia_ban_chi,
+            "nguon": "SJC - BTMC",
+            "thoi_gian": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        }
     except Exception as e:
-        print(f"⚠️ Dùng dữ liệu mẫu: {e}")
-        return 78500000, 79200000, 2450.50
+        print(f"Lỗi lấy giá: {e}")
+        return None
 
-def gui_thong_bao_telegram(sjc_mua, sjc_ban, xau):
-    """Gửi thông báo qua Telegram"""
-    now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    
-    tin_nhan = f"""
-🪙 **GIÁ VÀNG HÀNG NGÀY** — {now}
-━━━━━━━━━━━━━━━━━━━━━
-🇻🇳 **Vàng SJC 9999**
-💰 Mua vào: {sjc_mua:,} VNĐ/lượng
-💰 Bán ra:  {sjc_ban:,} VNĐ/lượng
-━━━━━━━━━━━━━━━━━━━━━
-🌍 **Vàng thế giới**
-📈 XAU/USD: {xau} USD/oz
-━━━━━━━━━━━━━━━━━━━━━
-🔄 Cập nhật mỗi 1 giờ
-    """
+def gui_telegram(thong_tin):
+    if not thong_tin:
+        noi_dung = "⚠️ Không thể lấy dữ liệu giá vàng. Vui lòng thử lại sau!"
+    else:
+        noi_dung = f"""🪙 **BÁO GIÁ VÀNG SJC** 🪙
+⏰ Thời gian: {thong_tin['thoi_gian']}
+📌 Nguồn: {thong_tin['nguon']}
+
+💰 **Giá Mua Vào:** {thong_tin['gia_mua']:,.0f} VNĐ/chỉ
+💰 **Giá Bán Ra:** {thong_tin['gia_ban']:,.0f} VNĐ/chỉ
+
+---
+🔄 Cập nhật mỗi giờ đúng phút 00
+"""
     
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    params = {
+    data = {
         "chat_id": CHAT_ID,
-        "text": tin_nhan,
+        "text": noi_dung,
         "parse_mode": "Markdown"
     }
-    
-    try:
-        res = requests.post(url, data=params, timeout=15)
-        result = res.json()
-        
-        if result.get("ok"):
-            print("✅ THÀNH CÔNG! Kiểm tra Telegram 📱")
-            return True
-        else:
-            print(f"⚠️ Lỗi: {result.get('description')}")
-            return False
-    except Exception as e:
-        print(f"❌ Lỗi: {e}")
-        return False
+    response = requests.post(url, data=data)
+    print("Đã gửi tin nhắn:", response.status_code)
 
 if __name__ == "__main__":
-    print("🔄 Đang xử lý...")
-    sjc_mua, sjc_ban, xau = lay_gia_vang()
-    gui_thong_bao_telegram(sjc_mua, sjc_ban, xau)
-
+    thong_tin = lay_gia_vang()
+    gui_telegram(thong_tin)
