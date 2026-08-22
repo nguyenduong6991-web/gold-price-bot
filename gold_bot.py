@@ -6,13 +6,13 @@ TELEGRAM_TOKEN = "8892269519:AAEtTq9n74OWVRN1CKmzIy5M1dfBbOJUToA"
 CHAT_ID = "7176458499"
 
 def lay_gia_vang():
-    # Giá lấy từ dữ liệu bot đang hoạt động
+    # Giá gốc theo VNĐ/lượng
     gia_mua_luong = 78500000  # VNĐ/lượng
     gia_ban_luong = 79200000  # VNĐ/lượng
     
-    # Chuyển đổi: 1 lượng = 10 chỉ
-    gia_mua_chi = gia_mua_luong / 10
-    gia_ban_chi = gia_ban_luong / 10
+    # CHUYỂN ĐỔI: 1 lượng = 10 chỉ → CHIA CHO 10
+    gia_mua_chi = gia_mua_luong / 10   # ✅ Đã chia cho 10
+    gia_ban_chi = gia_ban_luong / 10   # ✅ Đã chia cho 10
     
     return {
         "gia_mua": gia_mua_chi,
