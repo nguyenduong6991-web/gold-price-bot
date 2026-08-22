@@ -1,0 +1,27 @@
+name: Giá Vàng Hàng Ngày
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  send-gold-price:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tải code
+        uses: actions/checkout@v4
+        
+      - name: Cài Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Cài thư viện
+        run: pip install requests
+        
+      - name: Chạy bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python gold_bot.py
