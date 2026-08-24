@@ -19,88 +19,81 @@ def get_gold_prices():
     global first_run, prev_sjc_buy, prev_sjc_sell, prev_ring_buy, prev_ring_sell
     global prev_silver_buy, prev_silver_sell, prev_xau, prev_xag
     
+    print("="*50)
+    print("GIÁ VÀNG TỰ ĐỘNG")
+    print("="*50)
+    
+    sjc_buy, sjc_sell = 0, 0
+    ring_buy, ring_sell = 0, 0
+    xau_price, xag_price = 0, 0
+    
+    # ===== NGUỒN 1: Giá SJC từ API khác =====
     try:
-        sjc_buy, sjc_sell = 0, 0
-        try:
-            res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
-            if res_sjc.status_code == 200:
-                data_sjc = res_sjc.json()
-                if data_sjc and len(data_sjc) > 0:
-                    sjc_buy = int(float(data_sjc[0].get("buy", 0)) / 10)
-                    sjc_sell = int(float(data_sjc[0].get("sell", 0)) / 10)
-            print(f"✅ Vàng miếng SJC: Mua={sjc_buy}, Bán={sjc_sell} VNĐ/chỉ")
-        except Exception as e:
-            print(f"⚠️ Lỗi lấy giá SJC miếng: {e}")
-        
-        ring_buy, ring_sell = 0, 0
-        try:
-            res_ring = requests.get("https://www.vang.today/api/prices?type=SJ9999", timeout=15)
-            if res_ring.status_code == 200:
-                data_ring = res_ring.json()
-                if data_ring and len(data_ring) > 0:
-                    ring_buy = int(float(data_ring[0].get("buy", 0)) / 10)
-                    ring_sell = int(float(data_ring[0].get("sell", 0)) / 10)
-            print(f"✅ Vàng nhẫn SJC: Mua={ring_buy}, Bán={ring_sell} VNĐ/chỉ")
-        except Exception as e:
-            print(f"⚠️ Lỗi lấy giá SJC nhẫn: {e}")
-        
-        xau_price, xag_price = 0, 0
-        try:
-            res_xau = requests.get("https://www.vang.today/api/prices?type=XAUUSD", timeout=15)
-            if res_xau.status_code == 200:
-                data_xau = res_xau.json()
-                if data_xau and len(data_xau) > 0:
-                    xau_price = float(data_xau[0].get("buy", 0))
-            print(f"✅ Vàng thế giới XAU/USD: {xau_price} USD/oz")
-        except Exception as e:
-            print(f"⚠️ Lỗi lấy giá XAU: {e}")
-        
-        try:
-            res_xag = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
-            if res_xag.status_code == 200:
-                data_xag = res_xag.json()
-                xag_price = float(data_xag.get("price", 0))
-            print(f"✅ Bạc thế giới XAG/USD: {xag_price} USD/oz")
-        except Exception as e:
-            print(f"⚠️ Lỗi lấy giá XAG: {e}")
-        
-        if sjc_buy == 0 or sjc_sell == 0:
-            if first_run:
-                sjc_buy, sjc_sell = 14700000, 15000000
-            else:
-                sjc_buy, sjc_sell = prev_sjc_buy, prev_sjc_sell
-        
-        if ring_buy == 0 or ring_sell == 0:
-            if first_run:
-                ring_buy, ring_sell = 14850000, 15250000
-            else:
-                ring_buy, ring_sell = prev_ring_buy, prev_ring_sell
-        
-        if xau_price == 0:
-            if first_run:
-                xau_price = 2450.5
-            else:
-                xau_price = prev_xau
-        
-        if xag_price == 0:
-            if first_run:
-                xag_price = 29.5
-            else:
-                xag_price = prev_xag
-        
-        return {
-            "sjc_buy": sjc_buy,
-            "sjc_sell": sjc_sell,
-            "ring_buy": ring_buy,
-            "ring_sell": ring_sell,
-            "silver_buy": prev_silver_buy,
-            "silver_sell": prev_silver_sell,
-            "xau": round(xau_price, 2),
-            "xag": round(xag_price, 2)
-        }
+        res_sjc = requests.get("https://apigold.sjc.com.vn/api/Price/GetPriceByCode?code=SJC", timeout=15)
+        print(f"API SJC: HTTP {res_sjc.status_code}")
+        if res_sjc.status_code == 200:
+            data_sjc = res_sjc.json()
+            print(f"Dữ liệu SJC: {data_sjc}")
+            if data_sjc.get("success") and data_sjc.get("data"):
+                buy_val = float(data_sjc["data"].get("buy", 0))
+                sell_val = float(data_sjc["data"].get("sell", 0))
+                if buy_val > 0 and sell_val > 0:
+                    sjc_buy = int(buy_val / 10)  # VNĐ/lượng → chia 10 = VNĐ/chỉ
+                    sjc_sell = int(sell_val / 10)
+        print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
     except Exception as e:
-        print(f"❌ Lỗi tổng thể: {e}")
-        return None
+        print(f"⚠️ Lỗi lấy giá SJC miếng: {e}")
+    
+    # ===== NGUỒN 2: Giá thế giới XAU/USD =====
+    try:
+        res_xau = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+        print(f"API XAU: HTTP {res_xau.status_code}")
+        if res_xau.status_code == 200:
+            data_xau = res_xau.json()
+            xau_price = float(data_xau.get("price", 0))
+        print(f"✅ Vàng XAU/USD: {xau_price:.2f} USD/oz")
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy giá XAU: {e}")
+    
+    # ===== NGUỒN 3: Giá Bạc XAG/USD =====
+    try:
+        res_xag = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
+        print(f"API XAG: HTTP {res_xag.status_code}")
+        if res_xag.status_code == 200:
+            data_xag = res_xag.json()
+            xag_price = float(data_xag.get("price", 0))
+        print(f"✅ Bạc XAG/USD: {xag_price:.2f} USD/oz")
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy giá XAG: {e}")
+    
+    # ===== Tính toán giá vàng nhẫn & giá dự phòng =====
+    if sjc_buy == 0 or sjc_sell == 0:
+        print("⚠️ API SJC không trả về dữ liệu → dùng giá dự phòng")
+        if first_run:
+            sjc_buy, sjc_sell = 14700000, 15000000
+        else:
+            sjc_buy, sjc_sell = prev_sjc_buy, prev_sjc_sell
+    
+    # Vàng nhẫn SJC thường cao hơn vàng miếng khoảng 1-2 triệu/lượng
+    ring_buy = sjc_buy + 150000
+    ring_sell = sjc_sell + 250000
+    
+    if xau_price == 0:
+        xau_price = 2450.5 if first_run else prev_xau
+    
+    if xag_price == 0:
+        xag_price = 29.5 if first_run else prev_xag
+    
+    return {
+        "sjc_buy": sjc_buy,
+        "sjc_sell": sjc_sell,
+        "ring_buy": ring_buy,
+        "ring_sell": ring_sell,
+        "silver_buy": prev_silver_buy,
+        "silver_sell": prev_silver_sell,
+        "xau": round(xau_price, 2),
+        "xag": round(xag_price, 2)
+    }
 
 def calc_change(current, previous):
     if previous == 0 or first_run:
@@ -118,10 +111,19 @@ def get_icon(val):
     else: return "➖ "
 
 def send_telegram_message(text):
+    if not BOT_TOKEN:
+        print("❌ Chưa có BOT_TOKEN")
+        return None
+    if not CHAT_ID:
+        print("❌ Chưa có CHAT_ID")
+        return None
+    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     response = requests.post(url, data=data)
-    return response.json()
+    result = response.json()
+    print(f"📨 Kết quả gửi Telegram: {result.get('ok', False)}")
+    return result
 
 def main():
     global first_run, prev_sjc_buy, prev_sjc_sell, prev_ring_buy, prev_ring_sell
@@ -190,7 +192,7 @@ def main():
         msg += f"{get_icon(xag_change)}{xag_change:+.2f} USD ({xag_pct:+.2f}%)\n"
     
     msg += """━━━━━━━━━━━━━━━━━━━━━
-🔄 Cập nhật mỗi 1 giờ | Nguồn: vang.today & GoldAPI
+🔄 Cập nhật mỗi 1 giờ | Nguồn: SJC & GoldAPI
 """
     
     send_telegram_message(msg)
