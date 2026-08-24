@@ -2,8 +2,9 @@ import requests
 import datetime
 import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# ==== ĐÃ ĐIỀN THẲNG — KHÔNG CẦN SECRETS NỮA ====
+BOT_TOKEN = "8892269519:AAEtTq9n74OWVRN1CKmzIy5M1dfBbOJUToA"
+CHAT_ID = "7176458499"
 
 prev_sjc_buy = 0
 prev_sjc_sell = 0
@@ -26,33 +27,6 @@ def get_gold_prices():
     sjc_buy, sjc_sell = 0, 0
     ring_buy, ring_sell = 0, 0
     xau_price, xag_price = 0, 0
-
-        # ===== LẤY GIÁ VÀNG MIẾNG SJC từ vang.today =====
-    try:
-        res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
-        print(f"API vang.today SJC: HTTP {res_sjc.status_code}")
-        data_sjc = res_sjc.json()
-        print(f"Dữ liệu nhận được: {data_sjc}")
-        
-        # API trả về object trực tiếp
-        if data_sjc.get("success"):
-            buy_val = float(data_sjc.get("buy", 0))
-            sell_val = float(data_sjc.get("sell", 0))
-            print(f"Giá gốc từ API - Mua: {buy_val}, Bán: {sell_val}")
-            
-            if buy_val > 1000000 and sell_val > 1000000:  # > 1 triệu = VNĐ/lượng
-                sjc_buy = int(buy_val / 10)  # chia 10 ra VNĐ/chỉ
-                sjc_sell = int(sell_val / 10)
-                print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
-            elif buy_val > 0 and sell_val > 0:  # đã là VNĐ/chỉ
-                sjc_buy = int(buy_val)
-                sjc_sell = int(sell_val)
-                print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
-            else:
-                print("⚠️ Giá API quá nhỏ, dùng dự phòng")
-    except Exception as e:
-        print(f"Lỗi lấy giá SJC miếng: {e}")
-
     
     # ===== LẤY GIÁ VÀNG MIẾNG SJC từ vang.today =====
     try:
@@ -61,13 +35,18 @@ def get_gold_prices():
         data_sjc = res_sjc.json()
         print(f"Dữ liệu nhận được: {data_sjc}")
         
-        # API trả về object trực tiếp, không phải list
         if data_sjc.get("success"):
             buy_val = float(data_sjc.get("buy", 0))
             sell_val = float(data_sjc.get("sell", 0))
-            if buy_val > 0 and sell_val > 0:
-                sjc_buy = int(buy_val / 10)  # VNĐ/lượng → chia 10 = VNĐ/chỉ
+            print(f"Giá gốc từ API - Mua: {buy_val}, Bán: {sell_val}")
+            
+            if buy_val >= 10000000 and sell_val >= 10000000:
+                sjc_buy = int(buy_val / 10)
                 sjc_sell = int(sell_val / 10)
+                print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
+            elif buy_val > 0 and sell_val > 0:
+                sjc_buy = int(buy_val)
+                sjc_sell = int(sell_val)
                 print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
     except Exception as e:
         print(f"Lỗi lấy giá SJC miếng: {e}")
@@ -82,9 +61,13 @@ def get_gold_prices():
         if data_ring.get("success"):
             buy_val = float(data_ring.get("buy", 0))
             sell_val = float(data_ring.get("sell", 0))
-            if buy_val > 0 and sell_val > 0:
+            if buy_val >= 10000000 and sell_val >= 10000000:
                 ring_buy = int(buy_val / 10)
                 ring_sell = int(sell_val / 10)
+                print(f"✅ Vàng nhẫn SJC: Mua={ring_buy:,} - Bán={ring_sell:,} VNĐ/chỉ")
+            elif buy_val > 0 and sell_val > 0:
+                ring_buy = int(buy_val)
+                ring_sell = int(sell_val)
                 print(f"✅ Vàng nhẫn SJC: Mua={ring_buy:,} - Bán={ring_sell:,} VNĐ/chỉ")
     except Exception as e:
         print(f"Lỗi lấy giá SJC nhẫn: {e}")
