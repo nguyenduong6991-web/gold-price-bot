@@ -6,92 +6,110 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Giá tham chiếu để so sánh thay đổi (sẽ tự cập nhật sau mỗi lần chạy)
+# Giá tham chiếu để so sánh thay đổi (sẽ tự lưu sau mỗi lần chạy)
 prev_sjc_buy = 0
 prev_sjc_sell = 0
 prev_ring_buy = 0
 prev_ring_sell = 0
-prev_silver_buy = 0
-prev_silver_sell = 0
+prev_silver_buy = 52000
+prev_silver_sell = 58000
 prev_xau = 0
 prev_xag = 0
 first_run = True
 
 def get_gold_prices():
-    """Lấy giá vàng từ nguồn dữ liệu thực tế tự động"""
+    """Lấy giá vàng từ nguồn API thực tế vang.today"""
     global first_run, prev_sjc_buy, prev_sjc_sell, prev_ring_buy, prev_ring_sell
     global prev_silver_buy, prev_silver_sell, prev_xau, prev_xag
     
     try:
-        # ========== 1. LẤY GIÁ VÀNG SJC VIỆT NAM TỪ vang.today API ==========
+        # ========== 1. LẤY GIÁ VÀNG MIẾNG SJC 9999 ==========
         sjc_buy, sjc_sell = 0, 0
-        ring_buy, ring_sell = 0, 0
-        
         try:
-            # API trả về giá theo loại: SJL1L10 = Vàng miếng SJC 9999, SJ9999 = Vàng nhẫn SJC 9999
             res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
-            res_ring = requests.get("https://www.vang.today/api/prices?type=SJ9999", timeout=15)
-            
             if res_sjc.status_code == 200:
                 data_sjc = res_sjc.json()
                 if data_sjc and len(data_sjc) > 0:
                     # Giá trả về là VNĐ/lượng → chia 10 ra VNĐ/chỉ
                     sjc_buy = int(float(data_sjc[0].get("buy", 0)) / 10)
                     sjc_sell = int(float(data_sjc[0].get("sell", 0)) / 10)
-            
+            print(f"✅ Vàng miếng SJC: Mua={sjc_buy}, Bán={sjc_sell} VNĐ/chỉ")
+        except Exception as e:
+            print(f"⚠️ Lỗi lấy giá SJC miếng: {e}")
+        
+        # ========== 2. LẤY GIÁ VÀNG NHẪN SJC 9999 ==========
+        ring_buy, ring_sell = 0, 0
+        try:
+            res_ring = requests.get("https://www.vang.today/api/prices?type=SJ9999", timeout=15)
             if res_ring.status_code == 200:
                 data_ring = res_ring.json()
                 if data_ring and len(data_ring) > 0:
                     ring_buy = int(float(data_ring[0].get("buy", 0)) / 10)
                     ring_sell = int(float(data_ring[0].get("sell", 0)) / 10)
-            
-            print(f"✅ Lấy giá SJC thành công: Mua={sjc_buy}, Bán={sjc_sell} VNĐ/chỉ")
+            print(f"✅ Vàng nhẫn SJC: Mua={ring_buy}, Bán={ring_sell} VNĐ/chỉ")
         except Exception as e:
-            print(f"⚠️ Lỗi API vang.today: {e}")
-            # Fallback: nếu API lỗi, dùng giá dự phòng
-            if first_run:
-                sjc_buy, sjc_sell = 14700000, 15000000
-                ring_buy, ring_sell = 14850000, 15250000
+            print(f"⚠️ Lỗi lấy giá SJC nhẫn: {e}")
         
-        # ========== 2. GIÁ BẠC TRONG NƯỚC (dữ liệu tham khảo) ==========
-        # Lưu ý: Không có API miễn phí chuẩn cho bạc VN → tính theo tỷ lệ XAG
-        silver_buy, silver_sell = 52000, 58000
-        
-        # ========== 3. LẤY GIÁ THẾ GIỚI TỪ GoldAPI.io ==========
+        # ========== 3. LẤY GIÁ THẾ GIỚI (XAU/USD & XAG/USD) ==========
         xau_price, xag_price = 0, 0
         try:
-            res_xau = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
-            res_xag = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
-            
+            res_xau = requests.get("https://www.vang.today/api/prices?type=XAUUSD", timeout=15)
             if res_xau.status_code == 200:
-                xau_data = res_xau.json()
-                xau_price = float(xau_data.get("price", 0))
-            if res_xag.status_code == 200:
-                xag_data = res_xag.json()
-                xag_price = float(xag_data.get("price", 0))
-            
-            print(f"✅ Giá thế giới: XAU={xau_price}, XAG={xag_price}")
+                data_xau = res_xau.json()
+                if data_xau and len(data_xau) > 0:
+                    xau_price = float(data_xau[0].get("buy", 0))  # XAU/USD dùng giá buy
+            print(f"✅ Vàng thế giới XAU/USD: {xau_price} USD/oz")
         except Exception as e:
-            print(f"⚠️ Lỗi API thế giới: {e}")
-            if first_run:
-                xau_price, xag_price = 2450.5, 29.5
+            print(f"⚠️ Lỗi lấy giá XAU: {e}")
         
-        # Kiểm tra dữ liệu hợp lệ
+        # ========== 4. GIÁ BẠC THẾ GIỚI ==========
+        try:
+            res_xag = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
+            if res_xag.status_code == 200:
+                data_xag = res_xag.json()
+                xag_price = float(data_xag.get("price", 0))
+            print(f"✅ Bạc thế giới XAG/USD: {xag_price} USD/oz")
+        except Exception as e:
+            print(f"⚠️ Lỗi lấy giá XAG: {e}")
+        
+        # ========== KIỂM TRA & ĐẢM BẢO DỮ LIỆU HỢP LỆ ==========
+        # Nếu API lỗi, dùng giá dự phòng từ lần trước
         if sjc_buy == 0 or sjc_sell == 0:
-            raise Exception("Không lấy được giá SJC")
+            if first_run:
+                sjc_buy, sjc_sell = 14700000, 15000000  # Giá dự phòng lần đầu
+            else:
+                sjc_buy, sjc_sell = prev_sjc_buy, prev_sjc_sell
+        
+        if ring_buy == 0 or ring_sell == 0:
+            if first_run:
+                ring_buy, ring_sell = 14850000, 15250000
+            else:
+                ring_buy, ring_sell = prev_ring_buy, prev_ring_sell
+        
+        if xau_price == 0:
+            if first_run:
+                xau_price = 2450.5
+            else:
+                xau_price = prev_xau
+        
+        if xag_price == 0:
+            if first_run:
+                xag_price = 29.5
+            else:
+                xag_price = prev_xag
         
         return {
             "sjc_buy": sjc_buy,
             "sjc_sell": sjc_sell,
-            "ring_buy": ring_buy if ring_buy > 0 else sjc_buy + 150000,
-            "ring_sell": ring_sell if ring_sell > 0 else sjc_sell + 250000,
-            "silver_buy": silver_buy,
-            "silver_sell": silver_sell,
+            "ring_buy": ring_buy,
+            "ring_sell": ring_sell,
+            "silver_buy": prev_silver_buy,
+            "silver_sell": prev_silver_sell,
             "xau": round(xau_price, 2),
             "xag": round(xag_price, 2)
         }
     except Exception as e:
-        print(f"❌ Lỗi lấy giá: {e}")
+        print(f"❌ Lỗi tổng thể: {e}")
         return None
 
 def calc_change(current, previous):
@@ -134,7 +152,7 @@ def main():
     
     now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
-    # === Tính toán thay đổi % ===
+    # === Tính toán thay đổi % so với lần trước ===
     sjc_buy_change, sjc_buy_pct = calc_change(prices["sjc_buy"], prev_sjc_buy)
     sjc_sell_change, sjc_sell_pct = calc_change(prices["sjc_sell"], prev_sjc_sell)
     ring_buy_change, ring_buy_pct = calc_change(prices["ring_buy"], prev_ring_buy)
@@ -170,7 +188,7 @@ def main():
         msg += f"{get_icon(ring_sell_change)}{format_number(ring_sell_change)} VNĐ ({ring_sell_pct:+.2f}%)\n"
     
     msg += """━━━━━━━━━━━━━━━━━━━━━
-🥈 <b>Bạc 999</b>
+🥈 <b>Bạc 999 (Tham khảo)</b>
 💰 Giá Mua Vào: {format_number(prices['silver_buy'])} VNĐ/chỉ
 """.format(format_number=format_number, prices=prices)
     if not first_run:
@@ -192,7 +210,7 @@ def main():
         msg += f"{get_icon(xag_change)}{xag_change:+.2f} USD ({xag_pct:+.2f}%)\n"
     
     msg += """━━━━━━━━━━━━━━━━━━━━━
-🔄 Cập nhật mỗi 1 giờ — Dữ liệu tự động lấy từ nguồn thực tế
+🔄 Cập nhật mỗi 1 giờ | Nguồn: vang.today & GoldAPI
 """
     
     # === Gửi tin nhắn ===
@@ -210,7 +228,7 @@ def main():
     prev_xag = prices["xag"]
     
     if first_run:
-        print("ℹ️ Lần đầu chạy — chưa có dữ liệu so sánh % cho lần sau")
+        print("ℹ️ Lần đầu chạy — từ giờ sẽ tự so sánh với giá giờ trước")
         first_run = False
 
 if __name__ == "__main__":
