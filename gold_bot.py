@@ -3,7 +3,7 @@ import datetime
 import os
 
 # ==================== ĐÃ ĐIỀN SẴN — KHÔNG CẦN SỬA GÌ ====================
-BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"
+BOT_TOKEN = "8892269519:AAH1hKBuh7Rxm43YXz65x_TS9A1EDWb57Zo"
 CHAT_ID = "7176458499"
 # ======================================================================
 
@@ -29,7 +29,7 @@ def get_gold_prices():
     ring_buy, ring_sell = 0, 0
     xau_price, xag_price = 0, 0
     
-    # ===== NGUỒN 1: Vang.today �� Dữ liệu trong nước =====
+    # ===== NGUỒN 1: Vang.today — Dữ liệu trong nước =====
     try:
         res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
         print(f"🌐 API vang.today SJC: HTTP {res_sjc.status_code}")
@@ -124,16 +124,27 @@ def calc_change(current, previous):
     if previous == 0 or first_run:
         return 0, 0
     change = current - previous
-    change_percent = (change / previous) * 100
+    change_percent = (change / previous) * 100 if previous != 0 else 0
     return change, change_percent
 
 def format_number(num):
     return f"{num:,.0f}".replace(",", ".")
 
-def get_icon(val):
-    if val > 0: return "📈 +"
-    elif val < 0: return "📉 "
-    else: return "➖ "
+def format_change(change):
+    if change > 0:
+        return f"📈 +{format_number(change)} VNĐ"
+    elif change < 0:
+        return f"📉 {format_number(change)} VNĐ"
+    else:
+        return "➖ Không đổi"
+
+def format_change_usd(change):
+    if change > 0:
+        return f"📈 +{change:.2f} USD"
+    elif change < 0:
+        return f"📉 {change:.2f} USD"
+    else:
+        return "➖ Không đổi"
 
 def send_telegram_message(text):
     if not BOT_TOKEN:
@@ -169,6 +180,7 @@ def main():
     
     now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
+    # Tính giá thay đổi VNĐ và %
     sjc_buy_change, sjc_buy_pct = calc_change(prices["sjc_buy"], prev_sjc_buy)
     sjc_sell_change, sjc_sell_pct = calc_change(prices["sjc_sell"], prev_sjc_sell)
     ring_buy_change, ring_buy_pct = calc_change(prices["ring_buy"], prev_ring_buy)
@@ -183,37 +195,46 @@ def main():
 ━━━━━━━━━━━━━━━━━━━━━
 🇻🇳 <b>Vàng Miếng SJC 9999</b>
 💰 Mua vào: {format_number(prices['sjc_buy'])} VNĐ/chỉ
-💰 Bán ra:  {format_number(prices['sjc_sell'])} VNĐ/chỉ
 """
     if not first_run:
-        msg += f"{get_icon(sjc_buy_change)}{format_number(sjc_buy_change)} VNĐ ({sjc_buy_pct:+.2f}%)\n"
+        msg += f"   {format_change(sjc_buy_change)} ({sjc_buy_pct:+.2f}%)\n"
+    
+    msg += f"💰 Bán ra:  {format_number(prices['sjc_sell'])} VNĐ/chỉ\n"
+    if not first_run:
+        msg += f"   {format_change(sjc_sell_change)} ({sjc_sell_pct:+.2f}%)\n"
     
     msg += f"""━━━━━━━━━━━━━━━━━━━━━
 💍 <b>Vàng Nhẫn SJC 9999</b>
 💰 Mua vào: {format_number(prices['ring_buy'])} VNĐ/chỉ
-💰 Bán ra:  {format_number(prices['ring_sell'])} VNĐ/chỉ
 """
     if not first_run:
-        msg += f"{get_icon(ring_buy_change)}{format_number(ring_buy_change)} VNĐ ({ring_buy_pct:+.2f}%)\n"
+        msg += f"   {format_change(ring_buy_change)} ({ring_buy_pct:+.2f}%)\n"
+    
+    msg += f"💰 Bán ra:  {format_number(prices['ring_sell'])} VNĐ/chỉ\n"
+    if not first_run:
+        msg += f"   {format_change(ring_sell_change)} ({ring_sell_pct:+.2f}%)\n"
     
     msg += f"""━━━━━━━━━━━━━━━━━━━━━
 🥈 <b>Bạc 999 (Tham khảo)</b>
 💰 Mua vào: {format_number(prices['silver_buy'])} VNĐ/chỉ
-💰 Bán ra:  {format_number(prices['silver_sell'])} VNĐ/chỉ
 """
     if not first_run:
-        msg += f"{get_icon(silver_buy_change)}{format_number(silver_buy_change)} VNĐ ({silver_buy_pct:+.2f}%)\n"
+        msg += f"   {format_change(silver_buy_change)} ({silver_buy_pct:+.2f}%)\n"
+    
+    msg += f"💰 Bán ra:  {format_number(prices['silver_sell'])} VNĐ/chỉ\n"
+    if not first_run:
+        msg += f"   {format_change(silver_sell_change)} ({silver_sell_pct:+.2f}%)\n"
     
     msg += f"""━━━━━━━━━━━━━━━━━━━━━
 🌎 <b>Thị Trường Thế Giới</b>
 📊 Vàng XAU/USD: {prices['xau']:.2f} USD/oz
 """
     if not first_run:
-        msg += f"{get_icon(xau_change)}{xau_change:+.2f} USD ({xau_pct:+.2f}%)\n"
+        msg += f"   {format_change_usd(xau_change)} ({xau_pct:+.2f}%)\n"
     
     msg += f"📊 Bạc XAG/USD: {prices['xag']:.2f} USD/oz\n"
     if not first_run:
-        msg += f"{get_icon(xag_change)}{xag_change:+.2f} USD ({xag_pct:+.2f}%)\n"
+        msg += f"   {format_change_usd(xag_change)} ({xag_pct:+.2f}%)\n"
     
     msg += """━━━━━━━━━━━━━━━━━━━━━
 🔄 Cập nhật mỗi 1 giờ | Nguồn: vang.today & GoldAPI
@@ -222,6 +243,7 @@ def main():
     send_telegram_message(msg)
     print("✅ Đã gửi thông báo giá thành công!")
     
+    # Lưu giá hiện tại để so sánh giờ sau
     prev_sjc_buy = prices["sjc_buy"]
     prev_sjc_sell = prices["sjc_sell"]
     prev_ring_buy = prices["ring_buy"]
@@ -232,7 +254,7 @@ def main():
     prev_xag = prices["xag"]
     
     if first_run:
-        print("ℹ️ Lần đầu chạy — từ giờ sẽ so sánh với giờ trước")
+        print("ℹ️ Lần đầu chạy — từ giờ sẽ so sánh với giá giờ trước")
         first_run = False
 
 if __name__ == "__main__":
