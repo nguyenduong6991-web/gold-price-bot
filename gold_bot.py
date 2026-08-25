@@ -3,7 +3,7 @@ import datetime
 import os
 
 # ==================== ĐÃ ĐIỀN SẴN — KHÔNG CẦN SỬA GÌ ====================
-BOT_TOKEN = "8892269519:AAH1hKBuh7Rxm43YXz65x_TS9A1EDWb57Zo"
+BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"
 CHAT_ID = "7176458499"
 # ======================================================================
 
@@ -29,7 +29,7 @@ def get_gold_prices():
     ring_buy, ring_sell = 0, 0
     xau_price, xag_price = 0, 0
     
-    # ===== NGUỒN 1: Vang.today — Dữ liệu trong nước =====
+    # ===== NGUỒN 1: Vang.today �� Dữ liệu trong nước =====
     try:
         res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
         print(f"🌐 API vang.today SJC: HTTP {res_sjc.status_code}")
