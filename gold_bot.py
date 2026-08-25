@@ -12,8 +12,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===== LẤY TOKEN TỪ ENVIRONMENT VARIABLES =====
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8892269519:AAEtTq9n74OWVRN1CKmzIy5M1dfBbOJUToA")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7176458499")
+# Hỗ trợ cả hai tên biến môi trường: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (khuyến nghị)
+# hoặc BOT_TOKEN / CHAT_ID (để tương thích với secrets cũ)
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
 
 # ===== BIẾN GLOBAL LƯU GIÁ TỪ LẦN CHẠY TRƯỚC =====
 price_state = {
@@ -33,7 +35,7 @@ def verify_telegram_connection():
     logger.info("🔍 Đang kiểm tra kết nối Telegram...")
     
     if not BOT_TOKEN or not CHAT_ID:
-        logger.error("❌ BOT_TOKEN hoặc CHAT_ID bị thiếu!")
+        logger.error("❌ BOT_TOKEN hoặc CHAT_ID bị thiếu! Hãy kiểm tra biến môi trường.")
         return False
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
@@ -304,7 +306,7 @@ def main():
    {get_icon(xau_change)}{abs(xau_change):.2f} ({xau_pct:+.2f}%)
 📈 Bạc XAG/USD: <b>{prices['xag']:.1f}</b> USD/oz
    {get_icon(xag_change)}{abs(xag_change):.2f} ({xag_pct:+.2f}%)
-━━���━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━
 🔄 Cập nhật tự động mỗi giờ lúc 00 phút
 """
     
@@ -371,7 +373,7 @@ if __name__ == "__main__":
 ✅ Bot đã sẵn sàng gửi thông báo giá vàng
 🕒 Tin nhắn giá sẽ được gửi mỗi giờ lúc :00 phút
 
-📱 Chat ID: <code>""" + CHAT_ID + """</code>
+📱 Chat ID: <code>""" + str(CHAT_ID) + """</code>
 
 🔧 Nếu không muốn nhận thông báo, xóa chat này hoặc block bot
 """
