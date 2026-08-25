@@ -28,6 +28,34 @@ price_state = {
     "first_run": True
 }
 
+def verify_telegram_connection():
+    """Kiểm tra kết nối Telegram có hoạt động không"""
+    logger.info("🔍 Đang kiểm tra kết nối Telegram...")
+    
+    if not BOT_TOKEN or not CHAT_ID:
+        logger.error("❌ BOT_TOKEN hoặc CHAT_ID bị thiếu!")
+        return False
+    
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getMe"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('ok'):
+                bot_info = data.get('result', {})
+                logger.info(f"✅ Bot hoạt động: {bot_info.get('first_name')} (@{bot_info.get('username')})")
+                return True
+            else:
+                logger.error(f"❌ Token không hợp lệ: {data.get('description')}")
+                return False
+        else:
+            logger.error(f"❌ HTTP {response.status_code}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Lỗi kết nối Telegram: {e}")
+        return False
+
 def get_gold_prices():
     """Lấy giá vàng từ các API"""
     logger.info("=" * 50)
@@ -169,33 +197,63 @@ def get_icon(val):
     else:
         return "➖ "
 
-def send_telegram_message(text):
+def send_telegram_message(text, is_test=False):
     """Gửi tin nhắn tới Telegram"""
     if not BOT_TOKEN:
         logger.error("❌ Chưa có BOT_TOKEN")
-        return None
+        return False
     if not CHAT_ID:
         logger.error("❌ Chưa có CHAT_ID")
-        return None
+        return False
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     
     try:
-        logger.info("📤 Đang gửi đến Telegram...")
+        if is_test:
+            logger.info("🧪 Đang gửi tin nhắn TEST...")
+        else:
+            logger.info("📤 Đang gửi tin nhắn giá vàng...")
+        
         response = requests.post(url, data=data, timeout=10)
         result = response.json()
         
         if result.get('ok'):
-            logger.info("✅ Gửi Telegram thành công!")
-            return result
+            if is_test:
+                logger.info("✅ ✅ ✅ GỬI TEST TELEGRAM THÀNH CÔNG! ✅ ✅ ✅")
+            else:
+                logger.info("✅ Gửi Telegram thành công!")
+            return True
         else:
+            error_code = result.get('error_code')
             error_msg = result.get('description', 'Unknown error')
-            logger.error(f"❌ Telegram API trả về lỗi: {error_msg}")
-            return result
+            logger.error(f"❌ Telegram API lỗi ({error_code}): {error_msg}")
+            
+            # Giải thích lỗi chi tiết
+            if error_code == 400:
+                logger.error("   💡 Nguyên nhân: Chat ID sai hoặc bot chưa được add vào chat")
+                logger.error(f"   💡 Chat ID hiện tại: {CHAT_ID}")
+                logger.error("   💡 Cách fix: Kiểm tra Chat ID và thêm bot vào chat/group")
+            elif error_code == 401:
+                logger.error("   💡 Nguyên nhân: Bot Token không hợp lệ")
+                logger.error("   💡 Cách fix: Regenerate token trên @BotFather")
+            elif error_code == 403:
+                logger.error("   💡 Nguyên nhân: Bot bị block hoặc chat bị xóa")
+                logger.error("   💡 Cách fix: Unblock bot và thêm lại vào chat")
+            
+            return False
+            
+    except requests.exceptions.Timeout:
+        logger.error("❌ Timeout - Mất kết nối với Telegram API")
+        return False
+    except requests.exceptions.ConnectionError:
+        logger.error("❌ Connection Error - Kiểm tra kết nối mạng")
+        return False
     except Exception as e:
         logger.error(f"❌ Lỗi gửi Telegram: {e}")
-        return None
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
 
 def main():
     """Hàm chính - lấy giá và gửi thông báo"""
@@ -246,7 +304,7 @@ def main():
    {get_icon(xau_change)}{abs(xau_change):.2f} ({xau_pct:+.2f}%)
 📈 Bạc XAG/USD: <b>{prices['xag']:.1f}</b> USD/oz
    {get_icon(xag_change)}{abs(xag_change):.2f} ({xag_pct:+.2f}%)
-━━━━━━━━━━━━━━━━━━━━━
+━━���━━━━━━━━━━━━━━━━━━
 🔄 Cập nhật tự động mỗi giờ lúc 00 phút
 """
     
@@ -296,11 +354,47 @@ if __name__ == "__main__":
     logger.info(f"Bot Token: {'***' + BOT_TOKEN[-8:] if BOT_TOKEN else 'Chưa có'}")
     logger.info(f"Chat ID: {CHAT_ID}")
     
+    # Kiểm tra kết nối Telegram
+    logger.info("")
+    if not verify_telegram_connection():
+        logger.error("❌ ❌ ❌ BOT KHÔNG THỂ KẾT NỐI TELEGRAM ❌ ❌ ❌")
+        logger.error("Hãy kiểm tra:")
+        logger.error("1. Bot Token có đúng không?")
+        logger.error("2. Có kết nối internet không?")
+        exit(1)
+    
+    # Gửi tin nhắn test
+    logger.info("")
+    logger.info("Gửi tin nhắn test...")
+    test_msg = """🌟 <b>BOT GIÁ VÀNG ĐÃ KHỞI ĐỘNG THÀNH CÔNG!</b> 🌟
+
+✅ Bot đã sẵn sàng gửi thông báo giá vàng
+🕒 Tin nhắn giá sẽ được gửi mỗi giờ lúc :00 phút
+
+📱 Chat ID: <code>""" + CHAT_ID + """</code>
+
+🔧 Nếu không muốn nhận thông báo, xóa chat này hoặc block bot
+"""
+    
+    if send_telegram_message(test_msg, is_test=True):
+        logger.info("✅ Tin nhắn test gửi thành công!")
+    else:
+        logger.error("❌ ❌ ❌ KHÔNG GỬI ĐƯỢC TIN NHẮN TEST ❌ ❌ ❌")
+        logger.error("Chat ID của bạn có thể sai!")
+        logger.error("")
+        logger.error("📝 Cách xác định Chat ID đúng:")
+        logger.error("1. Forward tin nhắn từ chat này tới @userinfobot")
+        logger.error("2. Bot sẽ trả về Chat ID đúng")
+        logger.error("3. Update CHAT_ID trong code hoặc env variable")
+        exit(1)
+    
     # Chạy lần đầu ngay lập tức
-    logger.info("Chạy lần đầu ngay bây giờ...")
+    logger.info("")
+    logger.info("Chạy lần đầu lấy giá vàng ngay bây giờ...")
     main()
     
     # Khởi động scheduler
+    logger.info("")
     scheduler = start_scheduler()
     
     try:
