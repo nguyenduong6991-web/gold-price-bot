@@ -3,7 +3,7 @@ import datetime
 import os
 
 # ==================== ĐÃ ĐIỀN SẴN — KHÔNG CẦN SỬA GÌ ====================
-BOT_TOKEN = "8892269519:AAH1hKBuh7Rxm43YXz65x_TS9A1EDWb57Zo"
+BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"
 CHAT_ID = "7176458499"
 # ======================================================================
 
