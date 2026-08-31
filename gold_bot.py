@@ -1,261 +1,111 @@
 import requests
-import datetime
-import os
+import telegram
+from telegram.ext import Updater, CommandHandler
+import time
+from datetime import datetime
 
-# ==================== ĐÃ ĐIỀN SẴN — KHÔNG CẦN SỬA GÌ ====================
-BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"
-CHAT_ID = "7176458499"
-# ======================================================================
+# 🔧 THÔNG SỐ CẤU HÌNH — Điền thông tin của bạn vào đây
+BOT_TOKEN = "TOKEN_BOT_TELEGRAM_CỦA_BẠN"
+CHAT_ID = "ID_NHẬN_THÔNG_BÁO"
+UPDATE_INTERVAL = 300  # Cập nhật mỗi 5 phút = 300 giây (tùy chỉnh được)
 
-prev_sjc_buy = 0
-prev_sjc_sell = 0
-prev_ring_buy = 0
-prev_ring_sell = 0
-prev_silver_buy = 52000
-prev_silver_sell = 58000
-prev_xau = 0
-prev_xag = 0
-first_run = True
+# Biến lưu trữ giá cũ để tính % thay đổi
+gia_cu = {
+    "vang_mua": None,
+    "vang_ban": None,
+    "gia_the_gioi": None
+}
 
-def get_gold_prices():
-    global first_run, prev_sjc_buy, prev_sjc_sell, prev_ring_buy, prev_ring_sell
-    global prev_silver_buy, prev_silver_sell, prev_xau, prev_xag
-    
-    print("="*50)
-    print("GIÁ THỊ TRƯỜNG — CẬP NHẬT THỜI GIAN THỰC")
-    print("="*50)
-    
-    sjc_buy, sjc_sell = 0, 0
-    ring_buy, ring_sell = 0, 0
-    xau_price, xag_price = 0, 0
-    
-    # ===== NGUỒN 1: Vang.today — Dữ liệu trong nước =====
+# Hàm lấy giá vàng — SỬA LẠI để đảm bảo lấy dữ liệu MỚI mỗi lần gọi
+def lay_gia_vang():
     try:
-        res_sjc = requests.get("https://www.vang.today/api/prices?type=SJL1L10", timeout=15)
-        print(f"🌐 API vang.today SJC: HTTP {res_sjc.status_code}")
-        data_sjc = res_sjc.json()
-        print(f"📊 Dữ liệu SJC: {data_sjc}")
+        # Nguồn dữ liệu — có thể đổi nguồn khác nếu cần
+        url = "https://api.pnj.vn/price/gold"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        response = requests.get(url, headers=headers, timeout=15)
+        data = response.json()
         
-        if data_sjc.get("success"):
-            buy_val = float(data_sjc.get("buy", 0))
-            sell_val = float(data_sjc.get("sell", 0))
-            print(f"💵 Giá gốc - Mua: {buy_val}, Bán: {sell_val}")
+        # Trích xuất dữ liệu — điều chỉnh khớp với cấu trúc API bạn dùng
+        gia_mua = float(data.get("SJC_mua", 0))
+        gia_ban = float(data.get("SJC_ban", 0))
+        gia_the_gioi = float(data.get("gia_the_gioi", 0))
+        
+        if gia_mua == 0 or gia_ban == 0:
+            print(f"[{datetime.now()}] ⚠️ Dữ liệu không hợp lệ, bỏ qua lần này")
+            return None
             
-            if buy_val >= 10000000 and sell_val >= 10000000:
-                sjc_buy = int(buy_val / 10)
-                sjc_sell = int(sell_val / 10)
-                print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
-            elif buy_val > 0 and sell_val > 0:
-                sjc_buy = int(buy_val)
-                sjc_sell = int(sell_val)
-                print(f"✅ Vàng miếng SJC: Mua={sjc_buy:,} - Bán={sjc_sell:,} VNĐ/chỉ")
+        return {
+            "mua": gia_mua,
+            "ban": gia_ban,
+            "the_gioi": gia_the_gioi,
+            "thoi_gian": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        }
     except Exception as e:
-        print(f"⚠️ Lỗi lấy giá SJC: {e}")
-    
-    # ===== NGUỒN 2: Vàng nhẫn SJC =====
-    try:
-        res_ring = requests.get("https://www.vang.today/api/prices?type=SJ9999", timeout=15)
-        print(f"🌐 API vang.today Nhẫn: HTTP {res_ring.status_code}")
-        data_ring = res_ring.json()
-        
-        if data_ring.get("success"):
-            buy_val = float(data_ring.get("buy", 0))
-            sell_val = float(data_ring.get("sell", 0))
-            if buy_val >= 10000000 and sell_val >= 10000000:
-                ring_buy = int(buy_val / 10)
-                ring_sell = int(sell_val / 10)
-                print(f"✅ Vàng nhẫn SJC: Mua={ring_buy:,} - Bán={ring_sell:,} VNĐ/chỉ")
-            elif buy_val > 0 and sell_val > 0:
-                ring_buy = int(buy_val)
-                ring_sell = int(sell_val)
-                print(f"✅ Vàng nhẫn SJC: Mua={ring_buy:,} - Bán={ring_sell:,} VNĐ/chỉ")
-    except Exception as e:
-        print(f"⚠️ Lỗi lấy giá Nhẫn: {e}")
-    
-    # ===== NGUỒN 3: Giá thế giới XAU/USD & XAG/USD =====
-    try:
-        res_xau = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
-        if res_xau.status_code == 200:
-            data_xau = res_xau.json()
-            xau_price = float(data_xau.get("price", 0))
-        print(f"✅ Vàng XAU/USD: {xau_price:.2f} USD/oz")
-    except Exception as e:
-        print(f"⚠️ Lỗi lấy giá XAU: {e}")
-    
-    try:
-        res_xag = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
-        if res_xag.status_code == 200:
-            data_xag = res_xag.json()
-            xag_price = float(data_xag.get("price", 0))
-        print(f"✅ Bạc XAG/USD: {xag_price:.2f} USD/oz")
-    except Exception as e:
-        print(f"⚠️ Lỗi lấy giá XAG: {e}")
-    
-    # ===== GIÁ DỰ PHÒNG KHI API LỖI =====
-    if sjc_buy == 0 or sjc_sell == 0:
-        print("⚠️ Dùng giá dự phòng")
-        if first_run:
-            sjc_buy, sjc_sell = 7850000, 7920000
-        else:
-            sjc_buy, sjc_sell = prev_sjc_buy, prev_sjc_sell
-    
-    if ring_buy == 0 or ring_sell == 0:
-        ring_buy = sjc_buy + 150000
-        ring_sell = sjc_sell + 250000
-    
-    if xau_price == 0:
-        xau_price = 2450.5 if first_run else prev_xau
-    
-    if xag_price == 0:
-        xag_price = 29.5 if first_run else prev_xag
-    
-    return {
-        "sjc_buy": sjc_buy,
-        "sjc_sell": sjc_sell,
-        "ring_buy": ring_buy,
-        "ring_sell": ring_sell,
-        "silver_buy": prev_silver_buy,
-        "silver_sell": prev_silver_sell,
-        "xau": round(xau_price, 2),
-        "xag": round(xag_price, 2)
-    }
-
-def calc_change(current, previous):
-    if previous == 0 or first_run:
-        return 0, 0
-    change = current - previous
-    change_percent = (change / previous) * 100 if previous != 0 else 0
-    return change, change_percent
-
-def format_number(num):
-    return f"{num:,.0f}".replace(",", ".")
-
-def format_change(change):
-    if change > 0:
-        return f"📈 +{format_number(change)} VNĐ"
-    elif change < 0:
-        return f"📉 {format_number(change)} VNĐ"
-    else:
-        return "➖ Không đổi"
-
-def format_change_usd(change):
-    if change > 0:
-        return f"📈 +{change:.2f} USD"
-    elif change < 0:
-        return f"📉 {change:.2f} USD"
-    else:
-        return "➖ Không đổi"
-
-def send_telegram_message(text):
-    if not BOT_TOKEN:
-        print("❌ Chưa có BOT_TOKEN")
-        return None
-    if not CHAT_ID:
-        print("❌ Chưa có CHAT_ID")
-        return None
-    
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
-    print("📤 Đang gửi đến Telegram...")
-    
-    try:
-        response = requests.post(url, data=data, timeout=30)
-        result = response.json()
-        print(f"📨 Kết quả gửi: {result.get('ok', False)}")
-        if not result.get('ok', False):
-            print(f"❌ Lỗi Telegram: {result}")
-        return result
-    except Exception as e:
-        print(f"❌ Lỗi kết nối Telegram: {e}")
+        print(f"Lỗi lấy giá: {str(e)}")
         return None
 
+# Hàm tính toán % thay đổi & tạo nội dung thông báo
+def tao_thong_bao(gia_moi):
+    global gia_cu
+    tb = f"📊 **BÁO GIÁ VÀNG SJC — {gia_moi['thoi_gian']}**\n"
+    tb += "━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    # Giá mua
+    tb += f"💰 Giá MUA: {gia_moi['mua']:,} VNĐ/lượng\n"
+    if gia_cu["vang_mua"] is not None:
+        hieu_so = gia_moi['mua'] - gia_cu["vang_mua"]
+        phan_tram = (hieu_so / gia_cu["vang_mua"]) * 100
+        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
+        tb += f"   → {huong} {abs(hieu_so):,} VNĐ ({phan_tram:+.2f}%)\n"
+    
+    # Giá bán
+    tb += f"💰 Giá BÁN: {gia_moi['ban']:,} VNĐ/lượng\n"
+    if gia_cu["vang_ban"] is not None:
+        hieu_so = gia_moi['ban'] - gia_cu["vang_ban"]
+        phan_tram = (hieu_so / gia_cu["vang_ban"]) * 100
+        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
+        tb += f"   → {huong} {abs(hieu_so):,} VNĐ ({phan_tram:+.2f}%)\n"
+    
+    # Giá thế giới
+    tb += f"🌍 Giá TG: {gia_moi['the_gioi']:,} USD/ounce\n"
+    if gia_cu["gia_the_gioi"] is not None:
+        hieu_so = gia_moi['the_gioi'] - gia_cu["gia_the_gioi"]
+        phan_tram = (hieu_so / gia_cu["gia_the_gioi"]) * 100
+        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
+        tb += f"   → {huong} {abs(hieu_so):.2f} USD ({phan_tram:+.2f}%)\n"
+    
+    tb += "━━━━━━━━━━━━━━━━━━━━━"
+    
+    # CẬP NHẬT giá cũ = giá mới cho lần sau
+    gia_cu["vang_mua"] = gia_moi['mua']
+    gia_cu["vang_ban"] = gia_moi['ban']
+    gia_cu["gia_the_gioi"] = gia_moi['the_gioi']
+    
+    return tb
+
+# Lệnh /batdau
+def batdau(update, context):
+    update.message.reply_text("✅ Bot bắt đầu theo dõi giá vàng! Tôi sẽ cập nhật mỗi {} phút ⏱️".format(UPDATE_INTERVAL//60))
+    context.job_queue.run_repeat(gui_thong_bao_dinhky, UPDATE_INTERVAL, context=update.message.chat_id)
+
+# Hàm gửi thông báo định kỳ
+def gui_thong_bao_dinhky(context):
+    chat_id = context.job.context
+    gia_moi = lay_gia_vang()
+    
+    if gia_moi:  # Chỉ gửi khi có dữ liệu hợp lệ
+        noi_dung = tao_thong_bao(gia_moi)
+        bot = telegram.Bot(token=BOT_TOKEN)
+        bot.send_message(chat_id=chat_id, text=noi_dung, parse_mode='Markdown')
+
+# Hàm chính chạy bot
 def main():
-    global first_run, prev_sjc_buy, prev_sjc_sell, prev_ring_buy, prev_ring_sell
-    global prev_silver_buy, prev_silver_sell, prev_xau, prev_xag
-    
-    prices = get_gold_prices()
-    if not prices:
-        send_telegram_message("⚠️ Lỗi: Không lấy được dữ liệu giá!")
-        return
-    
-    now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    
-    # Tính giá thay đổi VNĐ và %
-    sjc_buy_change, sjc_buy_pct = calc_change(prices["sjc_buy"], prev_sjc_buy)
-    sjc_sell_change, sjc_sell_pct = calc_change(prices["sjc_sell"], prev_sjc_sell)
-    ring_buy_change, ring_buy_pct = calc_change(prices["ring_buy"], prev_ring_buy)
-    ring_sell_change, ring_sell_pct = calc_change(prices["ring_sell"], prev_ring_sell)
-    silver_buy_change, silver_buy_pct = calc_change(prices["silver_buy"], prev_silver_buy)
-    silver_sell_change, silver_sell_pct = calc_change(prices["silver_sell"], prev_silver_sell)
-    xau_change, xau_pct = calc_change(prices["xau"], prev_xau)
-    xag_change, xag_pct = calc_change(prices["xag"], prev_xag)
-    
-    msg = f"""🌍 <b>GIÁ THỊ TRƯỜNG VÀNG & BẠC</b> 🌍
-🕒 Cập nhật: {now}
-━━━━━━━━━━━━━━━━━━━━━
-🇻🇳 <b>Vàng Miếng SJC 9999</b>
-💰 Mua vào: {format_number(prices['sjc_buy'])} VNĐ/chỉ
-"""
-    if not first_run:
-        msg += f"   {format_change(sjc_buy_change)} ({sjc_buy_pct:+.2f}%)\n"
-    
-    msg += f"💰 Bán ra:  {format_number(prices['sjc_sell'])} VNĐ/chỉ\n"
-    if not first_run:
-        msg += f"   {format_change(sjc_sell_change)} ({sjc_sell_pct:+.2f}%)\n"
-    
-    msg += f"""━━━━━━━━━━━━━━━━━━━━━
-💍 <b>Vàng Nhẫn SJC 9999</b>
-💰 Mua vào: {format_number(prices['ring_buy'])} VNĐ/chỉ
-"""
-    if not first_run:
-        msg += f"   {format_change(ring_buy_change)} ({ring_buy_pct:+.2f}%)\n"
-    
-    msg += f"💰 Bán ra:  {format_number(prices['ring_sell'])} VNĐ/chỉ\n"
-    if not first_run:
-        msg += f"   {format_change(ring_sell_change)} ({ring_sell_pct:+.2f}%)\n"
-    
-    msg += f"""━━━━━━━━━━━━━━━━━━━━━
-🥈 <b>Bạc 999 (Tham khảo)</b>
-💰 Mua vào: {format_number(prices['silver_buy'])} VNĐ/chỉ
-"""
-    if not first_run:
-        msg += f"   {format_change(silver_buy_change)} ({silver_buy_pct:+.2f}%)\n"
-    
-    msg += f"💰 Bán ra:  {format_number(prices['silver_sell'])} VNĐ/chỉ\n"
-    if not first_run:
-        msg += f"   {format_change(silver_sell_change)} ({silver_sell_pct:+.2f}%)\n"
-    
-    msg += f"""━━━━━━━━━━━━━━━━━━━━━
-🌎 <b>Thị Trường Thế Giới</b>
-📊 Vàng XAU/USD: {prices['xau']:.2f} USD/oz
-"""
-    if not first_run:
-        msg += f"   {format_change_usd(xau_change)} ({xau_pct:+.2f}%)\n"
-    
-    msg += f"📊 Bạc XAG/USD: {prices['xag']:.2f} USD/oz\n"
-    if not first_run:
-        msg += f"   {format_change_usd(xag_change)} ({xag_pct:+.2f}%)\n"
-    
-    msg += """━━━━━━━━━━━━━━━━━━━━━
-🔄 Cập nhật mỗi 1 giờ | Nguồn: vang.today & GoldAPI
-"""
-    
-    send_telegram_message(msg)
-    print("✅ Đã gửi thông báo giá thành công!")
-    
-    # Lưu giá hiện tại để so sánh giờ sau
-    prev_sjc_buy = prices["sjc_buy"]
-    prev_sjc_sell = prices["sjc_sell"]
-    prev_ring_buy = prices["ring_buy"]
-    prev_ring_sell = prices["ring_sell"]
-    prev_silver_buy = prices["silver_buy"]
-    prev_silver_sell = prices["silver_sell"]
-    prev_xau = prices["xau"]
-    prev_xag = prices["xag"]
-    
-    if first_run:
-        print("ℹ️ Lần đầu chạy — từ giờ sẽ so sánh với giá giờ trước")
-        first_run = False
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler('batdau', batdau))
+    updater.start_polling()
+    print("🤖 Bot đang chạy...")
+    updater.idle()
 
 if __name__ == "__main__":
     main()
