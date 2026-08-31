@@ -5,8 +5,8 @@ import time
 from datetime import datetime
 
 # ================== CẤU HÌNH ==================
-BOT_TOKEN = "TOKEN_CỦA_BẠN"        # ⚠️ Đổi thật
-CHAT_ID = "CHAT_ID_CỦA_BẠN"        # ⚠️ Đổi thật
+BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"        # ⚠️ Đổi thật
+CHAT_ID = "7176458499"        # ⚠️ Đổi thật
 UPDATE_INTERVAL = 180  # ⏱️ 3 phút = 180 giây (ngắn hơn kiểm tra dễ)
 # ==============================================
 
