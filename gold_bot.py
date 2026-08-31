@@ -4,107 +4,154 @@ from telegram.ext import Updater, CommandHandler
 import time
 from datetime import datetime
 
-# 🔧 THÔNG SỐ CẤU HÌNH — Điền thông tin của bạn vào đây
-BOT_TOKEN = "TOKEN_BOT_TELEGRAM_CỦA_BẠN"
-CHAT_ID = "ID_NHẬN_THÔNG_BÁO"
-UPDATE_INTERVAL = 300  # Cập nhật mỗi 5 phút = 300 giây (tùy chỉnh được)
+# ================== CẤU HÌNH ==================
+BOT_TOKEN = "TOKEN_CỦA_BẠN"        # ⚠️ Đổi thật
+CHAT_ID = "CHAT_ID_CỦA_BẠN"        # ⚠️ Đổi thật
+UPDATE_INTERVAL = 180  # ⏱️ 3 phút = 180 giây (ngắn hơn kiểm tra dễ)
+# ==============================================
 
-# Biến lưu trữ giá cũ để tính % thay đổi
+# ✅ Dùng biến TOÀN CỤC, KHỞI TẠO 1 LẦN DUY NHẤT lúc chạy
 gia_cu = {
     "vang_mua": None,
     "vang_ban": None,
-    "gia_the_gioi": None
+    "gia_the_gioi": None,
+    "lan_cap_nhat_cu": None
 }
 
-# Hàm lấy giá vàng — SỬA LẠI để đảm bảo lấy dữ liệu MỚI mỗi lần gọi
+# 🔄 HÀM LẤY GIÁ VỚI 2 NGUỒN DỮ LIỆU + DEBUG + KIỂM TRA THAY ĐỔI
 def lay_gia_vang():
+    thoi_gian_hien_tai = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    
+    # ⚡ Nguồn 1: SJC chính thức
     try:
-        # Nguồn dữ liệu — có thể đổi nguồn khác nếu cần
-        url = "https://api.pnj.vn/price/gold"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        response = requests.get(url, headers=headers, timeout=15)
-        data = response.json()
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        # Dùng nguồn đáng tin, không bị cache
+        url = "https://sjc.com.vn/Service/GetGoldPrice.ashx"
+        res = requests.get(url, headers=headers, timeout=20)
+        res.encoding = 'utf-8'
+        data = res.json()
         
-        # Trích xuất dữ liệu — điều chỉnh khớp với cấu trúc API bạn dùng
-        gia_mua = float(data.get("SJC_mua", 0))
-        gia_ban = float(data.get("SJC_ban", 0))
-        gia_the_gioi = float(data.get("gia_the_gioi", 0))
-        
-        if gia_mua == 0 or gia_ban == 0:
-            print(f"[{datetime.now()}] ⚠️ Dữ liệu không hợp lệ, bỏ qua lần này")
-            return None
+        # Trích xuất đúng cấu trúc SJC
+        for item in data:
+            if item.get("Type") == "SJC":
+                gia_mua = float(item["BuyPrice"].replace(",", "").replace(".", "")) * 10
+                gia_ban = float(item["SellPrice"].replace(",", "").replace(".", "")) * 10
+                break
+        else:
+            raise Exception("Không tìm thấy giá SJC")
             
-        return {
-            "mua": gia_mua,
-            "ban": gia_ban,
-            "the_gioi": gia_the_gioi,
-            "thoi_gian": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        }
+        gia_tg = lay_gia_the_gioi()  # Lấy giá thế giới riêng
+        
+        print(f"✅ [{thoi_gian_hien_tai}] LẤY ĐƯỢC DỮ LIỆU | MUA: {gia_mua:,} | BÁN: {gia_ban:,} | TG: {gia_tg}")
+        return {"mua": gia_mua, "ban": gia_ban, "the_gioi": gia_tg, "thoi_gian": thoi_gian_hien_tai}
+    
     except Exception as e:
-        print(f"Lỗi lấy giá: {str(e)}")
+        print(f"❌ Nguồn SJC lỗi: {str(e)} → thử nguồn phụ...")
+    
+    # ⚡ Nguồn 2 dự phòng: PNJ
+    try:
+        url = "https://api.pnj.vn/public/price"
+        res = requests.get(url, timeout=20)
+        data = res.json()
+        gia_mua = float(data["gold"]["SJC"]["buy"])
+        gia_ban = float(data["gold"]["SJC"]["sell"])
+        gia_tg = float(data["gold"]["world_price"])
+        
+        print(f"✅ [{thoi_gian_hien_tai}] [NGUỒN PNJ] MUA: {gia_mua:,} | BÁN: {gia_ban:,}")
+        return {"mua": gia_mua, "ban": gia_ban, "the_gioi": gia_tg, "thoi_gian": thoi_gian_hien_tai}
+    except Exception as e2:
+        print(f"❌ Nguồn PNJ cũng lỗi: {str(e2)}")
         return None
 
-# Hàm tính toán % thay đổi & tạo nội dung thông báo
+def lay_gia_the_gioi():
+    try:
+        url = "https://data-asg.goldprice.org/dbXRates/USD"
+        res = requests.get(url, timeout=15)
+        data = res.json()
+        return round(data["items"][0]["xauPrice"], 2)
+    except:
+        return 0
+
+# 📊 TẠO NỘI DUNG THÔNG BÁO + TÍNH % + BẢO TOÀN GIÁ CŨ
 def tao_thong_bao(gia_moi):
-    global gia_cu
+    global gia_cu  # ✅ Dùng đúng biến toàn cục, KHÔNG reset
+    
     tb = f"📊 **BÁO GIÁ VÀNG SJC — {gia_moi['thoi_gian']}**\n"
-    tb += "━━━━━━━━━━━━━━━━━━━━━\n"
-    
-    # Giá mua
-    tb += f"💰 Giá MUA: {gia_moi['mua']:,} VNĐ/lượng\n"
-    if gia_cu["vang_mua"] is not None:
-        hieu_so = gia_moi['mua'] - gia_cu["vang_mua"]
-        phan_tram = (hieu_so / gia_cu["vang_mua"]) * 100
-        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
-        tb += f"   → {huong} {abs(hieu_so):,} VNĐ ({phan_tram:+.2f}%)\n"
-    
-    # Giá bán
-    tb += f"💰 Giá BÁN: {gia_moi['ban']:,} VNĐ/lượng\n"
-    if gia_cu["vang_ban"] is not None:
-        hieu_so = gia_moi['ban'] - gia_cu["vang_ban"]
-        phan_tram = (hieu_so / gia_cu["vang_ban"]) * 100
-        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
-        tb += f"   → {huong} {abs(hieu_so):,} VNĐ ({phan_tram:+.2f}%)\n"
-    
-    # Giá thế giới
-    tb += f"🌍 Giá TG: {gia_moi['the_gioi']:,} USD/ounce\n"
-    if gia_cu["gia_the_gioi"] is not None:
-        hieu_so = gia_moi['the_gioi'] - gia_cu["gia_the_gioi"]
-        phan_tram = (hieu_so / gia_cu["gia_the_gioi"]) * 100
-        huong = "📈 TĂNG" if hieu_so > 0 else "📉 GIẢM" if hieu_so < 0 else "➖ KHÔNG ĐỔI"
-        tb += f"   → {huong} {abs(hieu_so):.2f} USD ({phan_tram:+.2f}%)\n"
-    
-    tb += "━━━━━━━━━━━━━━━━━━━━━"
-    
-    # CẬP NHẬT giá cũ = giá mới cho lần sau
-    gia_cu["vang_mua"] = gia_moi['mua']
-    gia_cu["vang_ban"] = gia_moi['ban']
-    gia_cu["gia_the_gioi"] = gia_moi['the_gioi']
-    
+    tb += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+
+    # === GIÁ MUA ===
+    tb += f"💰 GIÁ MUA: {gia_moi['mua']:,} VNĐ/lượng\n"
+    if gia_cu["vang_mua"] is not None and gia_cu["vang_mua"] != gia_moi["mua"]:
+        hieu = gia_moi['mua'] - gia_cu["vang_mua"]
+        pct = (hieu / gia_cu["vang_mua"]) * 100
+        huong = "📈 TĂNG" if hieu > 0 else "📉 GIẢM"
+        tb += f"    └─ {huong} {abs(hieu):,} VNĐ ({pct:+.3f}%)\n"
+    else:
+        tb += f"    └─ ⏹ GIỐNG GIÁ CŨ / LẦN ĐẦU THEO DÕI\n"
+
+    # === GIÁ BÁN ===
+    tb += f"💰 GIÁ BÁN: {gia_moi['ban']:,} VNĐ/lượng\n"
+    if gia_cu["vang_ban"] is not None and gia_cu["vang_ban"] != gia_moi["ban"]:
+        hieu = gia_moi['ban'] - gia_cu["vang_ban"]
+        pct = (hieu / gia_cu["vang_ban"]) * 100
+        huong = "📈 TĂNG" if hieu > 0 else "📉 GIẢM"
+        tb += f"    └─ {huong} {abs(hieu):,} VNĐ ({pct:+.3f}%)\n"
+    else:
+        tb += f"    └─ ⏹ GIỐNG GIÁ CŨ / LẦN ĐẦU THEO DÕI\n"
+
+    # === GIÁ THẾ GIỚI ===
+    tb += f"🌍 GIÁ TG: {gia_moi['the_gioi']:,} USD/ounce\n"
+    if gia_cu["gia_the_gioi"] is not None and gia_cu["gia_the_gioi"] != gia_moi["the_gioi"]:
+        hieu = gia_moi['the_gioi'] - gia_cu["gia_the_gioi"]
+        pct = (hieu / gia_cu["gia_the_gioi"]) * 100
+        huong = "📈 TĂNG" if hieu > 0 else "📉 GIẢM"
+        tb += f"    └─ {huong} {abs(hieu):.2f} USD ({pct:+.3f}%)\n"
+
+    tb += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    tb += "🔄 Tự động cập nhật mỗi 3 phút"
+
+    # ✅ CẬP NHẬT GIÁ MỚI → LƯU LẠI cho lần sau — BƯỚC QUAN TRỌNG NHẤT
+    gia_cu["vang_mua"] = gia_moi["mua"]
+    gia_cu["vang_ban"] = gia_moi["ban"]
+    gia_cu["gia_the_gioi"] = gia_moi["the_gioi"]
+    gia_cu["lan_cap_nhat_cu"] = gia_moi["thoi_gian"]
+
     return tb
 
-# Lệnh /batdau
+# 🤖 LỆNH TELEGRAM
 def batdau(update, context):
-    update.message.reply_text("✅ Bot bắt đầu theo dõi giá vàng! Tôi sẽ cập nhật mỗi {} phút ⏱️".format(UPDATE_INTERVAL//60))
-    context.job_queue.run_repeat(gui_thong_bao_dinhky, UPDATE_INTERVAL, context=update.message.chat_id)
+    # Reset giá cũ khi khởi động lại bot để tính lại từ đầu
+    global gia_cu
+    gia_cu = {"vang_mua": None, "vang_ban": None, "gia_the_gioi": None, "lan_cap_nhat_cu": None}
+    
+    update.message.reply_text("""
+✅ **BOT BẮT ĐẦU HOẠT ĐỘNG**
+🔄 Cập nhật mỗi 3 phút
+📊 Hiển thị: Giá MUA / BÁN + % thay đổi + chênh lệch VNĐ
+🔗 Nguồn: SJC + PNJ (dự phòng)
+    """, parse_mode='Markdown')
+    
+    # Bắt đầu gửi định kỳ
+    context.job_queue.run_repeat(gui_thong_bao, UPDATE_INTERVAL, context=update.message.chat_id, first=1)
 
-# Hàm gửi thông báo định kỳ
-def gui_thong_bao_dinhky(context):
+def gui_thong_bao(context):
     chat_id = context.job.context
     gia_moi = lay_gia_vang()
     
-    if gia_moi:  # Chỉ gửi khi có dữ liệu hợp lệ
-        noi_dung = tao_thong_bao(gia_moi)
+    if gia_moi:
+        nd = tao_thong_bao(gia_moi)
         bot = telegram.Bot(token=BOT_TOKEN)
-        bot.send_message(chat_id=chat_id, text=noi_dung, parse_mode='Markdown')
+        bot.send_message(chat_id=chat_id, text=nd, parse_mode='Markdown')
+    else:
+        print("⚠️ Bỏ vòng này — chưa có dữ liệu hợp lệ")
 
-# Hàm chính chạy bot
+# 🚀 CHẠY BOT
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('batdau', batdau))
     updater.start_polling()
-    print("🤖 Bot đang chạy...")
+    print("🤖 BOT ĐANG CHẠY — Gõ /batdau trên Telegram để bắt đầu!")
     updater.idle()
 
 if __name__ == "__main__":
