@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '*/3 * * * *'  # Chạy mỗi 3 phút
-  workflow_dispatch:  # Cho phép chạy thủ công
+    - cron: '*/3 * * * *'  # ✅ Chạy mỗi 3 phút — ĐÚNG ĐỊNH DẠNG
+  workflow_dispatch:
 
 jobs:
   send-gold-price:
@@ -22,11 +22,10 @@ jobs:
       - name: 📦 Cài thư viện
         run: |
           python -m pip install --upgrade pip
-          pip install requests python-telegram-bot==13.7
+          pip install requests python-telegram-bot==13.7  # ✅ Đúng phiên bản, không cắt chữ
 
       - name: 🚀 Chạy bot báo giá
         env:
-          BOT_TOKEN: 8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM
+          BOT_TOKEN: 8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM  # ✅ Đúng dấu :
           CHAT_ID: 7176458499
-        run: |
-          python bot_vang.py
+        run: python bot_vang.py
