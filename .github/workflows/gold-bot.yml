@@ -1,24 +1,32 @@
 name: Giá Thị Trường Hàng Ngày
 
 on:
+  push:
+    branches: [ main ]
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '*/3 * * * *'  # Chạy mỗi 3 phút
+  workflow_dispatch:  # Cho phép chạy thủ công
 
 jobs:
   send-gold-price:
     runs-on: ubuntu-latest
     steps:
-      - name: Tải code
+      - name: 📥 Tải mã nguồn
         uses: actions/checkout@v4
-      
-      - name: Cài Python
+
+      - name: 🐍 Cài Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
-      - name: Cài thư viện
-        run: pip install requests
-      
-      - name: Chạy bot
-        run: python gold_bot.py
+
+      - name: 📦 Cài thư viện
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-telegram-bot==13.7
+
+      - name: 🚀 Chạy bot báo giá
+        env:
+          BOT_TOKEN: 8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM
+          CHAT_ID: 7176458499
+        run: |
+          python bot_vang.py
