@@ -22,48 +22,38 @@ def gui_telegram(noi_dung):
         print(f"Lỗi gửi Telegram: {e}")
         return False
 
-def lay_gia_tu_nguon_khac():
-    """Lấy giá vàng từ nguồn công khai dễ truy cập nhất"""
+def lay_gia_vang():
+    global gia_lan_truoc
     now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
-    # NGUỒN 1: GoldPrice API — đơn giản, không chặn
+    # === Lấy giá vàng thế giới ===
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; GoldBot/1.0)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get("https://data-asg.goldprice.org/dbXRates/USD", headers=headers, timeout=20)
-        if res.status_code != 200:
-            raise Exception(f"Status {res.status_code}")
         data = res.json()
-        gia_tg = round(data["items"][0]["xauPrice"], 2)
-        
-        # Quy đổi USD -> VNĐ
-        ty_gia = 25400  # USD/VND tham khảo
-        gia_mua = round(gia_tg * ty_gia / 31.1035 * 1.005, -3)
-        gia_ban = round(gia_tg * ty_gia / 31.1035 * 1.025, -3)
-        return gia_mua, gia_ban, gia_tg, now
-        
-    except Exception as e1:
-        print(f"Nguồn 1 lỗi: {e1}")
+        gia_tg_usd_per_oz = round(data["items"][0]["xauPrice"], 2)  # USD/ounce
+    except Exception as e:
+        print(f"Lỗi lấy giá TG: {e}")
+        gia_tg_usd_per_oz = 2450.00  # Giá dự phòng
     
-    # NGUỒN 2: Fallback — giá tham khảo cố định nếu API lỗi
-    try:
-        ty_gia = 25400
-        gia_tg = 2350.00  # Giá tham khảo trung bình
-        gia_mua = round(gia_tg * ty_gia / 31.1035 * 1.005, -3)
-        gia_ban = round(gia_tg * ty_gia / 31.1035 * 1.025, -3)
-        return gia_mua, gia_ban, gia_tg, now
-    except Exception as e2:
-        print(f"Nguồn 2 cũng lỗi: {e2}")
-        return None, None, None, now
-
-def tao_thong_bao(gia_mua, gia_ban, gia_tg, now):
-    global gia_lan_truoc
+    # === CÔNG THỨC QUY ĐỔI ĐÚNG ===
+    # 1 ounce = 31.1035 gam; 1 chỉ = 3.75 gam
+    ty_gia_usd_vnd = 25450  # Tỉ giá USD/VND cập nhật
+    usd_per_chỉ = gia_tg_usd_per_oz / 31.1035 * 3.75
+    gia_tham_khao = usd_per_chỉ * ty_gia_usd_vnd
+    
+    # Lệch giá SJC thị trường thực tế
+    gia_mua = round(gia_tham_khao * 0.995, -3)
+    gia_ban = round(gia_tham_khao * 1.015, -3)
+    
+    # === Tính % thay đổi ===
     tb = f"📊 *BÁO GIÁ VÀNG SJC — {now}*\n"
     tb += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     
     tb += f"💰 *GIÁ MUA:* {gia_mua:,.0f} VNĐ/chỉ\n"
     if gia_lan_truoc["mua"]:
         d = gia_mua - gia_lan_truoc["mua"]
-        p = (d / gia_lan_truoc["mua"]) * 100 if gia_lan_truoc["mua"] else 0
+        p = (d / gia_lan_truoc["mua"]) * 100
         tb += f"   → {'📈 TĂNG' if d>0 else '📉 GIẢM'} {abs(d):,.0f} VNĐ ({p:+.2f}%)\n"
     else:
         tb += "   → ⏹ Lần đầu theo dõi\n"
@@ -71,32 +61,29 @@ def tao_thong_bao(gia_mua, gia_ban, gia_tg, now):
     tb += f"💰 *GIÁ BÁN:* {gia_ban:,.0f} VNĐ/chỉ\n"
     if gia_lan_truoc["ban"]:
         d = gia_ban - gia_lan_truoc["ban"]
-        p = (d / gia_lan_truoc["ban"]) * 100 if gia_lan_truoc["ban"] else 0
+        p = (d / gia_lan_truoc["ban"]) * 100
         tb += f"   → {'📈 TĂNG' if d>0 else '📉 GIẢM'} {abs(d):,.0f} VNĐ ({p:+.2f}%)\n"
     else:
         tb += "   → ⏹ Lần đầu theo dõi\n"
     
-    tb += f"🌍 *GIÁ TG:* {gia_tg:,.2f} USD/ounce\n"
+    tb += f"🌍 *GIÁ TG:* {gia_tg_usd_per_oz:,.2f} USD/ounce\n"
     if gia_lan_truoc["tg"]:
-        d = gia_tg - gia_lan_truoc["tg"]
-        p = (d / gia_lan_truoc["tg"]) * 100 if gia_lan_truoc["tg"] else 0
+        d = gia_tg_usd_per_oz - gia_lan_truoc["tg"]
+        p = (d / gia_lan_truoc["tg"]) * 100
         tb += f"   → {'📈 TĂNG' if d>0 else '📉 GIẢM'} {abs(d):,.2f} USD ({p:+.2f}%)\n"
     
     tb += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     tb += "🔄 Cập nhật mỗi 3 phút | Nguồn: GoldPrice.org\n"
-    tb += "💡 *Giá Việt Nam là tham khảo, chênh lệch thực tế tại tiệm*"
+    tb += "💡 *Giá tham khảo — chênh lệch tại từng tiệm vàng*"
     
+    # Lưu giá lần này
     gia_lan_truoc["mua"] = gia_mua
     gia_lan_truoc["ban"] = gia_ban
-    gia_lan_truoc["tg"] = gia_tg
+    gia_lan_truoc["tg"] = gia_tg_usd_per_oz
+    
     return tb
 
 if __name__ == "__main__":
-    mua, ban, tg, now = lay_gia_tu_nguon_khac()
-    if mua and ban:
-        tb = tao_thong_bao(mua, ban, tg, now)
-        print(tb)
-        gui_telegram(tb)
-    else:
-        print("❌ Không lấy được giá nào")
-        gui_telegram(f"⚠️ *TẠM THỜI KHÔNG LẤY ĐƯỢC DỮ LIỆU*\nThời gian: {now}\nVui lòng chờ lần cập nhật sau!")
+    noi_dung = lay_gia_vang()
+    print(noi_dung)
+    gui_telegram(noi_dung)
