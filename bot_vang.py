@@ -3,7 +3,6 @@ import requests
 from datetime import datetime
 
 # ================== THÔNG TIN BOT ==================
-# Kiểm tra lại Token: nói @BotFather gửi /token để xác nhận
 BOT_TOKEN = "8869557187:AAEn9CJ3llOx5H5VhG9fBBubv0t-QvLmiuY"
 CHAT_ID = "7176458499"
 # ====================================================
@@ -37,31 +36,17 @@ def lay_gia_tu_api():
     xau_usd_oz = 4436.90
     xag_usd_oz = 66.66
     
-    # Thử nhiều nguồn khác nhau để không bị chặn
-    nguon_hop_le = False
+    # Thử lấy giá từ nhiều nguồn
     try:
-        # Nguồn 1
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         res = requests.get("https://data-asg.goldprice.org/dbXRates/USD", headers=headers, timeout=15)
         if res.status_code == 200 and "items" in res.text:
             data = res.json()
             xau_usd_oz = round(data["items"][0]["xauPrice"], 2)
             xag_usd_oz = round(data["items"][0]["xagPrice"], 2)
-            nguon_hop_le = True
-            print(f"✅ Nguồn 1 thành công: XAU={xau_usd_oz}")
+            print(f"✅ Lấy giá thành công: XAU={xau_usd_oz}")
     except Exception as e:
-        print(f"⚠️ Nguồn 1 lỗi: {str(e)}")
-    
-    if not nguon_hop_le:
-        try:
-            # Nguồn 2 dự phòng
-            res2 = requests.get("https://api.gold-api.com/price/XAU", timeout=15)
-            if res2.status_code == 200:
-                d2 = res2.json()
-                xau_usd_oz = round(float(d2.get("price", 4436.90)), 2)
-                print(f"✅ Nguồn 2 thành công: XAU={xau_usd_oz}")
-        except Exception as e2:
-            print(f"⚠️ Nguồn 2 cũng lỗi: {str(e2)} — dùng giá dự phòng")
+        print(f"⚠️ Nguồn chính lỗi, dùng dự phòng: {str(e)}")
 
     # Tính toán
     ty_gia_usd_vnd = 25400
@@ -149,10 +134,9 @@ if __name__ == "__main__":
     print("📩 Đang gửi đến Telegram...")
     thanh_cong = gui_telegram(noi_dung)
     if thanh_cong:
-        print("=== GỬI THÀNH CÔNG ===")
+        print("=== ✅ GỬI THÀNH CÔNG ===")
     else:
-        print("=== GỬI THẤT BẠI ===")
+        print("=== ❌ GỬI THẤT BẠI ===")
         print("⚠️ Kiểm tra:")
         print("1. Gửi /start cho bot trên Telegram chưa?")
-        print("2. Token có đúng không? Hỏi @BotFather gửi /token")
-        print(f"3. Chat ID: {CHAT_ID}")
+        print(f"2. Chat ID đúng: {CHAT_ID}")
