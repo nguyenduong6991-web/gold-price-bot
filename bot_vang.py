@@ -4,7 +4,7 @@ from datetime import datetime
 
 # ================== THÔNG TIN BOT ==================
 # Kiểm tra lại Token: nói @BotFather gửi /token để xác nhận
-BOT_TOKEN = "8692896172:AAHjfrK_c5OmCyZZ7aqRRdSpa-CmItdDkAM"
+BOT_TOKEN = "8869557187:AAEn9CJ3llOx5H5VhG9fBBubv0t-QvLmiuY"
 CHAT_ID = "7176458499"
 # ====================================================
 
